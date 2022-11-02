@@ -140,8 +140,8 @@ class RgmiiSource(Reset):
                 self._run_cr = None
 
             self.active = False
-            self.data <= 0
-            self.ctrl <= 0
+            self.data.value = 0
+            self.ctrl.value = 0
 
             if self.current_frame:
                 self.log.warning("Flushed transmit frame during reset: %s", self.current_frame)
@@ -153,7 +153,7 @@ class RgmiiSource(Reset):
         else:
             self.log.info("Reset de-asserted")
             if self._run_cr is None:
-                self._run_cr = cocotb.fork(self._run())
+                self._run_cr = cocotb.start_soon(self._run())
 
     async def _run(self):
         frame = None
@@ -166,12 +166,15 @@ class RgmiiSource(Reset):
         er = 0
         en = 0
 
+        clock_rising_edge_event = RisingEdge(self.clock)
+        clock_falling_edge_event = FallingEdge(self.clock)
+
         while True:
-            await RisingEdge(self.clock)
+            await clock_rising_edge_event
 
             # send high nibble after rising edge, leading in to falling edge
-            self.data <= d >> 4
-            self.ctrl <= en ^ er
+            self.data.value = d >> 4
+            self.ctrl.value = en ^ er
 
             if self.enable is None or self.enable.value:
                 if ifg_cnt > 0:
@@ -232,11 +235,11 @@ class RgmiiSource(Reset):
                     self.active = False
                     self.idle_event.set()
 
-            await FallingEdge(self.clock)
+                await clock_falling_edge_event
 
-            # send low nibble after falling edge, leading in to rising edge
-            self.data <= d & 0x0F
-            self.ctrl <= en
+                # send low nibble after falling edge, leading in to rising edge
+                self.data.value = d & 0x0F
+                self.ctrl.value = en
 
 
 class RgmiiSink(Reset):
@@ -330,7 +333,7 @@ class RgmiiSink(Reset):
         else:
             self.log.info("Reset de-asserted")
             if self._run_cr is None:
-                self._run_cr = cocotb.fork(self._run())
+                self._run_cr = cocotb.start_soon(self._run())
 
     async def _run(self):
         frame = None
@@ -339,20 +342,23 @@ class RgmiiSink(Reset):
         dv_val = 0
         er_val = 0
 
+        clock_rising_edge_event = RisingEdge(self.clock)
+        clock_falling_edge_event = FallingEdge(self.clock)
+
         while True:
-            await RisingEdge(self.clock)
-
-            # capture low nibble on rising edge
-            d_val = self.data.value.integer
-            dv_val = self.ctrl.value.integer
-
-            await FallingEdge(self.clock)
-
-            # capture high nibble on falling edge
-            d_val |= self.data.value.integer << 4
-            er_val = dv_val ^ self.ctrl.value.integer
+            await clock_rising_edge_event
 
             if self.enable is None or self.enable.value:
+
+                # capture low nibble on rising edge
+                d_val = self.data.value.integer
+                dv_val = self.ctrl.value.integer
+
+                await clock_falling_edge_event
+
+                # capture high nibble on falling edge
+                d_val |= self.data.value.integer << 4
+                er_val = dv_val ^ self.ctrl.value.integer
 
                 if frame is None:
                     if dv_val:
@@ -434,11 +440,11 @@ class RgmiiPhy:
             self._clock_cr.kill()
 
         if self.speed == 1000e6:
-            self._clock_cr = cocotb.fork(self._run_clock(8*1e9/self.speed))
+            self._clock_cr = cocotb.start_soon(self._run_clock(8*1e9/self.speed))
             self.tx.mii_mode = False
             self.rx.mii_mode = False
         else:
-            self._clock_cr = cocotb.fork(self._run_clock(4*1e9/self.speed))
+            self._clock_cr = cocotb.start_soon(self._run_clock(4*1e9/self.speed))
             self.tx.mii_mode = True
             self.rx.mii_mode = True
 
@@ -448,6 +454,6 @@ class RgmiiPhy:
 
         while True:
             await t
-            self.rx_clk <= 1
+            self.rx_clk.value = 1
             await t
-            self.rx_clk <= 0
+            self.rx_clk.value = 0

@@ -250,8 +250,8 @@ class XgmiiSource(Reset):
                 self._run_cr = None
 
             self.active = False
-            self.data <= 0
-            self.ctrl <= 0
+            self.data.value = 0
+            self.ctrl.value = 0
 
             if self.current_frame:
                 self.log.warning("Flushed transmit frame during reset: %s", self.current_frame)
@@ -263,7 +263,7 @@ class XgmiiSource(Reset):
         else:
             self.log.info("Reset de-asserted")
             if self._run_cr is None:
-                self._run_cr = cocotb.fork(self._run())
+                self._run_cr = cocotb.start_soon(self._run())
 
     async def _run(self):
         frame = None
@@ -272,8 +272,10 @@ class XgmiiSource(Reset):
         deficit_idle_cnt = 0
         self.active = False
 
+        clock_edge_event = RisingEdge(self.clock)
+
         while True:
-            await RisingEdge(self.clock)
+            await clock_edge_event
 
             if self.enable is None or self.enable.value:
                 if ifg_cnt + deficit_idle_cnt > self.byte_lanes-1 or (not self.enable_dic and ifg_cnt > 4):
@@ -351,11 +353,11 @@ class XgmiiSource(Reset):
                             d_val |= XgmiiCtrl.IDLE << k*8
                             c_val |= 1 << k
 
-                    self.data <= d_val
-                    self.ctrl <= c_val
+                    self.data.value = d_val
+                    self.ctrl.value = c_val
                 else:
-                    self.data <= self.idle_d
-                    self.ctrl <= self.idle_c
+                    self.data.value = self.idle_d
+                    self.ctrl.value = self.idle_c
                     self.active = False
                     self.idle_event.set()
 
@@ -450,14 +452,16 @@ class XgmiiSink(Reset):
         else:
             self.log.info("Reset de-asserted")
             if self._run_cr is None:
-                self._run_cr = cocotb.fork(self._run())
+                self._run_cr = cocotb.start_soon(self._run())
 
     async def _run(self):
         frame = None
         self.active = False
 
+        clock_edge_event = RisingEdge(self.clock)
+
         while True:
-            await RisingEdge(self.clock)
+            await clock_edge_event
 
             if self.enable is None or self.enable.value:
                 for offset in range(self.byte_lanes):

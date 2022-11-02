@@ -140,10 +140,10 @@ class MiiSource(Reset):
                 self._run_cr = None
 
             self.active = False
-            self.data <= 0
+            self.data.value = 0
             if self.er is not None:
-                self.er <= 0
-            self.dv <= 0
+                self.er.value = 0
+            self.dv.value = 0
 
             if self.current_frame:
                 self.log.warning("Flushed transmit frame during reset: %s", self.current_frame)
@@ -155,7 +155,7 @@ class MiiSource(Reset):
         else:
             self.log.info("Reset de-asserted")
             if self._run_cr is None:
-                self._run_cr = cocotb.fork(self._run())
+                self._run_cr = cocotb.start_soon(self._run())
 
     async def _run(self):
         frame = None
@@ -165,8 +165,10 @@ class MiiSource(Reset):
         ifg_cnt = 0
         self.active = False
 
+        clock_edge_event = RisingEdge(self.clock)
+
         while True:
-            await RisingEdge(self.clock)
+            await clock_edge_event
 
             if self.enable is None or self.enable.value:
                 if ifg_cnt > 0:
@@ -202,10 +204,10 @@ class MiiSource(Reset):
                     d = frame_data[frame_offset]
                     if frame.sim_time_sfd is None and d == 0xD:
                         frame.sim_time_sfd = get_sim_time()
-                    self.data <= d
+                    self.data.value = d
                     if self.er is not None:
-                        self.er <= frame_error[frame_offset]
-                    self.dv <= 1
+                        self.er.value = frame_error[frame_offset]
+                    self.dv.value = 1
                     frame_offset += 1
 
                     if frame_offset >= len(frame_data):
@@ -215,10 +217,10 @@ class MiiSource(Reset):
                         frame = None
                         self.current_frame = None
                 else:
-                    self.data <= 0
+                    self.data.value = 0
                     if self.er is not None:
-                        self.er <= 0
-                    self.dv <= 0
+                        self.er.value = 0
+                    self.dv.value = 0
                     self.active = False
                     self.idle_event.set()
 
@@ -313,14 +315,16 @@ class MiiSink(Reset):
         else:
             self.log.info("Reset de-asserted")
             if self._run_cr is None:
-                self._run_cr = cocotb.fork(self._run())
+                self._run_cr = cocotb.start_soon(self._run())
 
     async def _run(self):
         frame = None
         self.active = False
 
+        clock_edge_event = RisingEdge(self.clock)
+
         while True:
-            await RisingEdge(self.clock)
+            await clock_edge_event
 
             if self.enable is None or self.enable.value:
                 d_val = self.data.value.integer
@@ -402,7 +406,7 @@ class MiiPhy:
         if self._clock_cr is not None:
             self._clock_cr.kill()
 
-        self._clock_cr = cocotb.fork(self._run_clocks(4*1e9/self.speed))
+        self._clock_cr = cocotb.start_soon(self._run_clocks(4*1e9/self.speed))
 
     async def _run_clocks(self, period):
         half_period = get_sim_steps(period / 2.0, 'ns')
@@ -410,8 +414,8 @@ class MiiPhy:
 
         while True:
             await t
-            self.tx_clk <= 1
-            self.rx_clk <= 1
+            self.tx_clk.value = 1
+            self.rx_clk.value = 1
             await t
-            self.tx_clk <= 0
-            self.rx_clk <= 0
+            self.tx_clk.value = 0
+            self.rx_clk.value = 0

@@ -45,8 +45,8 @@ class TB:
         self.log = logging.getLogger("cocotb.tb")
         self.log.setLevel(logging.DEBUG)
 
-        cocotb.fork(Clock(dut.tx_clk, 6.4, units="ns").start())
-        cocotb.fork(Clock(dut.rx_clk, 6.4, units="ns").start())
+        cocotb.start_soon(Clock(dut.tx_clk, 6.4, units="ns").start())
+        cocotb.start_soon(Clock(dut.rx_clk, 6.4, units="ns").start())
 
         self.mac = EthMac(
             tx_clk=dut.tx_clk,
@@ -54,6 +54,7 @@ class TB:
             tx_bus=AxiStreamBus.from_prefix(dut, "tx_axis"),
             tx_ptp_time=dut.tx_ptp_time,
             tx_ptp_ts=dut.tx_ptp_ts,
+            tx_ptp_ts_tag=dut.tx_ptp_ts_tag,
             tx_ptp_ts_valid=dut.tx_ptp_ts_valid,
             rx_clk=dut.rx_clk,
             rx_rst=dut.rx_rst,
